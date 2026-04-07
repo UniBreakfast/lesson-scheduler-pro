@@ -42,6 +42,44 @@
         "teacherUid": { "type": "string" }
       },
       "required": ["studentId", "startTime", "endTime", "teacherUid"]
+    },
+    "BookingLink": {
+      "title": "BookingLink",
+      "description": "A link generated for a student to book a lesson.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "workStartTime": { "type": "string", "format": "date-time" },
+        "workEndTime": { "type": "string", "format": "date-time" },
+        "teacherUid": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "used", "invalid"] },
+        "lessonsSnapshot": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["studentId", "studentName", "date", "workStartTime", "workEndTime", "teacherUid", "teacherName", "status"]
+    },
+    "BookingRequest": {
+      "title": "BookingRequest",
+      "description": "A request from a student to book a lesson.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "subject": { "type": "string" },
+        "notes": { "type": "string" },
+        "teacherUid": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "denied"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "bookingLinkId": { "type": "string" }
+      },
+      "required": ["studentId", "startTime", "endTime", "teacherUid", "status", "bookingLinkId"]
     }
   },
   "firestore": {
@@ -56,6 +94,14 @@
     "/lessons/{lessonId}": {
       "schema": "Lesson",
       "description": "Scheduled lessons."
+    },
+    "/bookingLinks/{linkId}": {
+      "schema": "BookingLink",
+      "description": "Generated booking links."
+    },
+    "/bookingRequests/{requestId}": {
+      "schema": "BookingRequest",
+      "description": "Pending and processed booking requests."
     }
   }
 }

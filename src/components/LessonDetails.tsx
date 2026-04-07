@@ -124,12 +124,16 @@ export default function LessonDetails({ lesson, students, onSave, onDelete, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-md">
+    <div 
+      className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-md"
+      onClick={handleCloseAttempt}
+    >
       <div className="flex min-h-full items-center justify-center py-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
         >
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-8 py-6">
           <div className="flex items-center gap-4">

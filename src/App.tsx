@@ -3,15 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { auth, db, onAuthStateChanged, collection, query, where, onSnapshot, setDoc, doc, deleteDoc, User, OperationType, handleFirestoreError, testConnection } from './firebase';
+import React, { useState, useEffect, useMemo } from 'react';
+import { auth, db, onAuthStateChanged, collection, query, where, onSnapshot, setDoc, doc, deleteDoc, getDocs, User, OperationType, handleFirestoreError, testConnection } from './firebase';
 import Layout from './components/Layout';
 import CalendarViews from './components/CalendarViews';
 import LessonDetails from './components/LessonDetails';
 import StudentManager from './components/StudentManager';
 import StudentModal from './components/StudentModal';
-import { Lesson, Student, ViewType, LessonFilter } from './types';
-import { format, addHours, startOfMonth, endOfMonth } from 'date-fns';
+import BookingModal from './components/BookingModal';
+import BookingLinksManager from './components/BookingLinksManager';
+import StudentBookingView from './components/StudentBookingView';
+import NotificationCenter from './components/NotificationCenter';
+import HotkeysModal from './components/HotkeysModal';
+import { Lesson, Student, ViewType, LessonFilter, BookingLink, BookingRequest } from './types';
+import { parseDate, getLocalDateString } from './lib/bookingUtils';
+import { format, addHours, startOfMonth, endOfMonth, addYears, subYears, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, endOfDay } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -26,6 +32,12 @@ export default function App() {
   const [isEditingLessonMode, setIsEditingLessonMode] = useState(false);
   const [isAddingStudentFromLesson, setIsAddingStudentFromLesson] = useState(false);
   const [viewingStudentId, setViewingStudentId] = useState<string | null>(null);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [isBookingLinksManagerOpen, setIsBookingLinksManagerOpen] = useState(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [isHotkeysModalOpen, setIsHotkeysModalOpen] = useState(false);
+  const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([]);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [lessonFilters, setLessonFilters] = useState<LessonFilter>({
@@ -50,6 +62,82 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  const filteredLessonsCount = useMemo(() => {
+    return lessons.filter(lesson => {
+      if (!lessonFilters) return true;
+      if (lessonFilters.startDate || lessonFilters.endDate) {
+        const lessonDate = new Date(lesson.startTime);
+        if (lessonFilters.startDate && lessonDate < new Date(lessonFilters.startDate)) return false;
+        if (lessonFilters.endDate && lessonDate > endOfDay(new Date(lessonFilters.endDate))) return false;
+      }
+      if (lessonFilters.studentId && lesson.studentId !== lessonFilters.studentId) return false;
+      if (lessonFilters.tags.length > 0) {
+        if (!lesson.tags || !lessonFilters.tags.every(tag => lesson.tags?.includes(tag))) return false;
+      }
+      if (lessonFilters.search) {
+        const searchLower = lessonFilters.search.toLowerCase();
+        return lesson.studentName?.toLowerCase().includes(searchLower) ||
+               lesson.subject?.toLowerCase().includes(searchLower) ||
+               lesson.notes?.toLowerCase().includes(searchLower) ||
+               lesson.tags?.some(t => t.toLowerCase().includes(searchLower));
+      }
+      return true;
+    }).length;
+  }, [lessons, lessonFilters]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      const activeElement = document.activeElement;
+      const isInput = activeElement instanceof HTMLInputElement || 
+                      activeElement instanceof HTMLTextAreaElement || 
+                      activeElement instanceof HTMLSelectElement;
+      
+      // Don't trigger if any modal is open (except hotkeys modal itself)
+      const isModalOpen = editingLesson || isAddingStudentFromLesson || viewingStudentId || isBookingModalOpen || isNotificationCenterOpen || isBookingLinksManagerOpen;
+
+      if (isInput || isModalOpen) return;
+
+      switch (e.code) {
+        case 'Digit1': setView('day'); break;
+        case 'Digit2': setView('week'); break;
+        case 'Digit3': setView('month'); break;
+        case 'Digit4': setView('year'); break;
+        case 'KeyC': setView('month'); break;
+        case 'KeyL': setView('period'); break;
+        case 'KeyS': setView('students'); break;
+        case 'ArrowRight':
+          if (['year', 'month', 'week', 'day'].includes(view)) {
+            if (view === 'year') setSelectedDate(d => addYears(d, 1));
+            else if (view === 'month') setSelectedDate(d => addMonths(d, 1));
+            else if (view === 'week') setSelectedDate(d => addWeeks(d, 1));
+            else if (view === 'day') setSelectedDate(d => addDays(d, 1));
+          } else if (view === 'period') {
+            const pageSize = 50;
+            if ((page + 1) * pageSize < filteredLessonsCount) {
+              setPage(p => p + 1);
+            }
+          }
+          break;
+        case 'ArrowLeft':
+          if (['year', 'month', 'week', 'day'].includes(view)) {
+            if (view === 'year') setSelectedDate(d => subYears(d, 1));
+            else if (view === 'month') setSelectedDate(d => subMonths(d, 1));
+            else if (view === 'week') setSelectedDate(d => subWeeks(d, 1));
+            else if (view === 'day') setSelectedDate(d => subDays(d, 1));
+          } else if (view === 'period') {
+            if (page > 0) {
+              setPage(p => p - 1);
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view, editingLesson, isAddingStudentFromLesson, viewingStudentId, isBookingModalOpen, isNotificationCenterOpen, isBookingLinksManagerOpen, page, filteredLessonsCount]);
+
   useEffect(() => {
     if (!user || !isAuthReady) {
       setLessons([]);
@@ -70,9 +158,16 @@ export default function App() {
       setStudents(studentsData);
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'students'));
 
+    const requestsQuery = query(collection(db, 'bookingRequests'), where('teacherUid', '==', user.uid));
+    const unsubscribeRequests = onSnapshot(requestsQuery, (snapshot) => {
+      const requestsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BookingRequest));
+      setBookingRequests(requestsData);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'bookingRequests'));
+
     return () => {
       unsubscribeLessons();
       unsubscribeStudents();
+      unsubscribeRequests();
     };
   }, [user, isAuthReady]);
 
@@ -101,8 +196,32 @@ export default function App() {
         }
       });
 
+      const oldLesson = lessonData.id ? lessons.find(l => l.id === lessonData.id) : null;
       await setDoc(doc(db, 'lessons', lessonId), finalData);
       setEditingLesson(null);
+
+      // Invalidate active booking links for this date(s)
+      const newDate = getLocalDateString(parseDate(finalData.startTime));
+      const oldDate = oldLesson ? getLocalDateString(parseDate(oldLesson.startTime)) : null;
+      
+      const datesToInvalidate = new Set<string>();
+      if (newDate) datesToInvalidate.add(newDate);
+      if (oldDate) datesToInvalidate.add(oldDate);
+
+      for (const dateStr of Array.from(datesToInvalidate)) {
+        const linksQuery = query(
+          collection(db, 'bookingLinks'), 
+          where('teacherUid', '==', user.uid),
+          where('date', '==', dateStr),
+          where('status', '==', 'active')
+        );
+        const linksSnapshot = await getDocs(linksQuery);
+        const invalidatePromises = linksSnapshot.docs.map(d => 
+          setDoc(doc(db, 'bookingLinks', d.id), { status: 'invalid' }, { merge: true })
+        );
+        await Promise.all(invalidatePromises);
+      }
+
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'lessons');
     }
@@ -110,8 +229,26 @@ export default function App() {
 
   const handleDeleteLesson = async (id: string) => {
     try {
+      const lessonToDelete = lessons.find(l => l.id === id);
       await deleteDoc(doc(db, 'lessons', id));
       setEditingLesson(null);
+
+      if (lessonToDelete && user) {
+        const lessonDate = getLocalDateString(parseDate(lessonToDelete.startTime));
+        if (lessonDate) {
+          const linksQuery = query(
+            collection(db, 'bookingLinks'), 
+            where('teacherUid', '==', user.uid),
+            where('date', '==', lessonDate),
+            where('status', '==', 'active')
+          );
+          const linksSnapshot = await getDocs(linksQuery);
+          const invalidatePromises = linksSnapshot.docs.map(d => 
+            setDoc(doc(db, 'bookingLinks', d.id), { status: 'invalid' }, { merge: true })
+          );
+          await Promise.all(invalidatePromises);
+        }
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'lessons');
     }
@@ -138,6 +275,56 @@ export default function App() {
       await deleteDoc(doc(db, 'students', id));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'students');
+    }
+  };
+
+  const handleGenerateBookingLink = async (linkData: Partial<BookingLink>) => {
+    if (!user) throw new Error('User not authenticated');
+    const linkId = doc(collection(db, 'bookingLinks')).id;
+    const finalData = {
+      ...linkData,
+      id: linkId,
+      teacherUid: user.uid,
+      teacherName: user.displayName || user.email || 'Teacher',
+      createdAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, 'bookingLinks', linkId), finalData);
+    return linkId;
+  };
+
+  const handleAcceptRequest = async (request: BookingRequest) => {
+    if (!user) return;
+    try {
+      // Create lesson
+      const lessonId = doc(collection(db, 'lessons')).id;
+      const lesson: Lesson = {
+        id: lessonId,
+        studentId: request.studentId,
+        studentName: request.studentName,
+        startTime: request.startTime,
+        endTime: request.endTime,
+        subject: request.subject,
+        notes: request.notes,
+        teacherUid: user.uid,
+        completed: false
+      };
+      await setDoc(doc(db, 'lessons', lessonId), lesson);
+
+      // Update request status
+      await setDoc(doc(db, 'bookingRequests', request.id), { ...request, status: 'accepted' });
+      
+      // Mark link as used
+      await setDoc(doc(db, 'bookingLinks', request.bookingLinkId), { status: 'used' }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'bookingRequests');
+    }
+  };
+
+  const handleDenyRequest = async (requestId: string) => {
+    try {
+      await setDoc(doc(db, 'bookingRequests', requestId), { status: 'denied' }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'bookingRequests');
     }
   };
 
@@ -243,6 +430,13 @@ export default function App() {
     input.click();
   };
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const bookingLinkId = urlParams.get('booking');
+
+  if (bookingLinkId) {
+    return <StudentBookingView linkId={bookingLinkId} />;
+  }
+
   if (!isAuthReady) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -263,6 +457,12 @@ export default function App() {
       onViewChange={setView}
       onSaveData={handleSaveData}
       onLoadData={handleLoadData}
+      pendingRequestsCount={bookingRequests.filter(r => r.status === 'pending').length}
+      onOpenNotifications={() => setIsNotificationCenterOpen(true)}
+      onOpenBookingLinks={() => setIsBookingLinksManagerOpen(true)}
+      onOpenHotkeys={() => setIsHotkeysModalOpen(true)}
+      lessons={lessons}
+      selectedDate={selectedDate}
     >
       <AnimatePresence mode="wait">
         {!user ? (
@@ -320,6 +520,9 @@ export default function App() {
                 onDeleteLesson={handleDeleteLesson}
                 filters={lessonFilters}
                 onFilterChange={setLessonFilters}
+                onOpenBooking={() => setIsBookingModalOpen(true)}
+                page={page}
+                setPage={setPage}
               />
             )}
           </motion.div>
@@ -384,6 +587,45 @@ export default function App() {
               setEditingLesson(null);
               handleNavigateToLessons({ studentId, tags: [], search: '' });
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isBookingModalOpen && (
+          <BookingModal
+            date={selectedDate}
+            students={students}
+            lessons={lessons}
+            onGenerateLink={handleGenerateBookingLink}
+            onClose={() => setIsBookingModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isNotificationCenterOpen && (
+          <NotificationCenter
+            requests={bookingRequests}
+            onAccept={handleAcceptRequest}
+            onDeny={handleDenyRequest}
+            onClose={() => setIsNotificationCenterOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isHotkeysModalOpen && (
+          <HotkeysModal onClose={() => setIsHotkeysModalOpen(false)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isBookingLinksManagerOpen && user && (
+          <BookingLinksManager
+            teacherUid={user.uid}
+            students={students}
+            onClose={() => setIsBookingLinksManagerOpen(false)}
           />
         )}
       </AnimatePresence>

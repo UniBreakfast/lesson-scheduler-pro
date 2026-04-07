@@ -99,13 +99,17 @@ export default function StudentModal({ student, lessons = [], onSave, onDelete, 
   };
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-md">
+    <div 
+      className="fixed inset-0 z-[70] overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-md"
+      onClick={handleCloseAttempt}
+    >
       <div className="flex min-h-full items-center justify-center py-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-8 py-6">
             <h2 className="text-2xl font-black text-slate-900">

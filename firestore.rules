@@ -112,6 +112,30 @@ service cloud.firestore {
              data.teacherUid is string && data.teacherUid == request.auth.uid;
     }
 
+    function isValidBookingLink(data) {
+      return data.keys().hasAll(['studentId', 'studentName', 'date', 'workStartTime', 'workEndTime', 'teacherUid', 'teacherName', 'status', 'busySlots']) &&
+             data.studentId is string &&
+             data.studentName is string &&
+             data.date is string &&
+             isValidDateString(data.workStartTime) &&
+             isValidDateString(data.workEndTime) &&
+             data.teacherUid is string && data.teacherUid == request.auth.uid &&
+             data.teacherName is string &&
+             data.status in ['active', 'used', 'invalid'] &&
+             data.busySlots is list;
+    }
+
+    function isValidBookingRequest(data) {
+      return data.keys().hasAll(['studentId', 'studentName', 'startTime', 'endTime', 'teacherUid', 'status', 'bookingLinkId']) &&
+             data.studentId is string &&
+             data.studentName is string &&
+             isValidDateString(data.startTime) &&
+             isValidDateString(data.endTime) &&
+             data.teacherUid is string &&
+             data.status in ['pending', 'accepted', 'denied'] &&
+             data.bookingLinkId is string;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -133,6 +157,20 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (resource.data.teacherUid == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && isValidLesson(request.resource.data);
       allow update: if isAuthenticated() && isDocOwner() && isValidLesson(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner();
+    }
+
+    match /bookingLinks/{linkId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidBookingLink(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && isValidBookingLink(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner();
+    }
+
+    match /bookingRequests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.teacherUid == request.auth.uid || isAdmin());
+      allow create: if isValidBookingRequest(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && isValidBookingRequest(request.resource.data);
       allow delete: if isAuthenticated() && isDocOwner();
     }
   }

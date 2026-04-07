@@ -19,9 +19,12 @@ interface CalendarViewsProps {
   setSelectedDate: (date: Date) => void;
   filters?: LessonFilter;
   onFilterChange?: (filters: LessonFilter) => void;
+  onOpenBooking?: () => void;
+  page?: number;
+  setPage?: (page: number) => void;
 }
 
-export default function CalendarViews({ lessons, students, onAddLesson, onEditLesson, onDeleteLesson, view, setView, selectedDate, setSelectedDate, filters, onFilterChange }: CalendarViewsProps) {
+export default function CalendarViews({ lessons, students, onAddLesson, onEditLesson, onDeleteLesson, view, setView, selectedDate, setSelectedDate, filters, onFilterChange, onOpenBooking, page = 0, setPage }: CalendarViewsProps) {
   const [lessonToDelete, setLessonToDelete] = useState<string | null>(null);
   
   const getLessonTint = (count: number) => {
@@ -320,14 +323,23 @@ export default function CalendarViews({ lessons, students, onAddLesson, onEditLe
             </span>
             <h2 className="text-3xl font-black text-slate-900">{format(selectedDate, 'MMMM d, yyyy')}</h2>
           </div>
-          <button
-            onClick={handleAddLesson}
-            className={`flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
-              isWeekend ? 'bg-red-600 shadow-red-200 hover:bg-red-700' : 'bg-brick-600 shadow-brick-200 hover:bg-brick-700'
-            }`}
-          >
-            <Plus className="h-6 w-6" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onOpenBooking}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white border-2 border-brick-600 text-brick-600 shadow-lg shadow-brick-50 transition-all active:scale-95 hover:bg-brick-50"
+              title="Booking Availability"
+            >
+              <Clock className="h-6 w-6" />
+            </button>
+            <button
+              onClick={handleAddLesson}
+              className={`flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
+                isWeekend ? 'bg-red-600 shadow-red-200 hover:bg-red-700' : 'bg-brick-600 shadow-brick-200 hover:bg-brick-700'
+              }`}
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -415,7 +427,6 @@ export default function CalendarViews({ lessons, students, onAddLesson, onEditLe
   };
 
   const renderPeriodView = () => {
-    const [page, setPage] = useState(0);
     const [sortConfig, setSortConfig] = useState<{ key: keyof Lesson | 'studentName'; direction: 'asc' | 'desc' }>({
       key: 'startTime',
       direction: 'desc'
@@ -481,7 +492,7 @@ export default function CalendarViews({ lessons, students, onAddLesson, onEditLe
     const handleFilterChange = (updates: Partial<LessonFilter>) => {
       if (onFilterChange && filters) {
         onFilterChange({ ...filters, ...updates });
-        setPage(0);
+        setPage?.(0);
       }
     };
 
@@ -494,7 +505,7 @@ export default function CalendarViews({ lessons, students, onAddLesson, onEditLe
           search: '',
           studentId: null
         });
-        setPage(0);
+        setPage?.(0);
       }
     };
 
@@ -597,7 +608,7 @@ export default function CalendarViews({ lessons, students, onAddLesson, onEditLe
           <div className="flex items-center gap-2">
             <button
               disabled={page === 0}
-              onClick={() => setPage(p => p - 1)}
+              onClick={() => setPage?.(page - 1)}
               className="rounded-lg border border-slate-200 p-2 disabled:opacity-30 hover:bg-slate-50 transition-colors"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -605,7 +616,7 @@ export default function CalendarViews({ lessons, students, onAddLesson, onEditLe
             <span className="text-sm font-bold w-16 text-center">Page {page + 1}</span>
             <button
               disabled={(page + 1) * pageSize >= sortedLessons.length}
-              onClick={() => setPage(p => p + 1)}
+              onClick={() => setPage?.(page + 1)}
               className="rounded-lg border border-slate-200 p-2 disabled:opacity-30 hover:bg-slate-50 transition-colors"
             >
               <ChevronRight className="h-5 w-5" />
@@ -744,29 +755,29 @@ export default function CalendarViews({ lessons, students, onAddLesson, onEditLe
     <div className="space-y-8">
       {view !== 'period' && (
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            <ViewButton active={view === 'day'} onClick={() => { setView('day'); setSelectedDate(new Date()); }} icon={<Clock className="h-4 w-4" />} label="Day" />
+            <ViewButton active={view === 'week'} onClick={() => { setView('week'); setSelectedDate(new Date()); }} icon={<CalendarDays className="h-4 w-4" />} label="Week" />
+            <ViewButton active={view === 'month'} onClick={() => { setView('month'); setSelectedDate(new Date()); }} icon={<LayoutGrid className="h-4 w-4" />} label="Month" />
+            <ViewButton active={view === 'year'} onClick={() => { setView('year'); setSelectedDate(new Date()); }} icon={<CalendarRange className="h-4 w-4" />} label="Year" />
+          </div>
+
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <button onClick={handlePrev} className="rounded-lg p-1.5 hover:bg-slate-100"><ChevronLeft className="h-5 w-5" /></button>
+              <button
+                onClick={() => setSelectedDate(new Date())}
+                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
+                  isToday(selectedDate) ? 'bg-brick-600 text-white rounded-lg shadow-md' : 'hover:bg-slate-100 rounded-lg'
+                }`}
+              >
+                {isToday(selectedDate) ? 'TODAY' : 'Today'}
+              </button>
+              <button onClick={handleNext} className="rounded-lg p-1.5 hover:bg-slate-100"><ChevronRight className="h-5 w-5" /></button>
+            </div>
             <h2 className="text-2xl font-black text-slate-900">
               {view === 'year' ? format(selectedDate, 'yyyy') : format(selectedDate, 'MMMM yyyy')}
             </h2>
-            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-              <button onClick={handlePrev} className="rounded-lg p-1.5 hover:bg-slate-100"><ChevronLeft className="h-5 w-5" /></button>
-          <button
-            onClick={() => setSelectedDate(new Date())}
-            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
-              isToday(selectedDate) ? 'bg-brick-600 text-white rounded-lg shadow-md' : 'hover:bg-slate-100 rounded-lg'
-            }`}
-          >
-            {isToday(selectedDate) ? 'TODAY' : 'Today'}
-          </button>
-              <button onClick={handleNext} className="rounded-lg p-1.5 hover:bg-slate-100"><ChevronRight className="h-5 w-5" /></button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            <ViewButton active={view === 'year'} onClick={() => setView('year')} icon={<CalendarRange className="h-4 w-4" />} label="Year" />
-            <ViewButton active={view === 'month'} onClick={() => setView('month')} icon={<LayoutGrid className="h-4 w-4" />} label="Month" />
-            <ViewButton active={view === 'week'} onClick={() => setView('week')} icon={<CalendarDays className="h-4 w-4" />} label="Week" />
-            <ViewButton active={view === 'day'} onClick={() => setView('day')} icon={<Clock className="h-4 w-4" />} label="Day" />
           </div>
         </div>
       )}

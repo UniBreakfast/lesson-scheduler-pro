@@ -1,8 +1,10 @@
 import React from 'react';
 import { auth, signOut, googleProvider, signInWithPopup } from '../firebase';
 import { User } from 'firebase/auth';
-import { LogOut, LogIn, Calendar, Users, List, Download, Upload } from 'lucide-react';
+import { LogOut, LogIn, Calendar, Users, List, Download, Upload, Bell, Link as LinkIcon, Keyboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Lesson } from '../types';
+import { isSameDay, isSameWeek, isSameMonth, isSameYear, differenceInMinutes } from 'date-fns';
 
 interface LayoutProps {
   user: User | null;
@@ -11,11 +13,57 @@ interface LayoutProps {
   onViewChange: (view: any) => void;
   onSaveData?: () => void;
   onLoadData?: () => void;
+  pendingRequestsCount?: number;
+  onOpenNotifications?: () => void;
+  onOpenBookingLinks?: () => void;
+  onOpenHotkeys?: () => void;
+  lessons?: Lesson[];
+  selectedDate?: Date;
 }
 
-export default function Layout({ user, children, activeView, onViewChange, onSaveData, onLoadData }: LayoutProps) {
+export default function Layout({ 
+  user, 
+  children, 
+  activeView, 
+  onViewChange, 
+  onSaveData, 
+  onLoadData, 
+  pendingRequestsCount = 0, 
+  onOpenNotifications, 
+  onOpenBookingLinks,
+  onOpenHotkeys,
+  lessons = [],
+  selectedDate = new Date()
+}: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+
+  const stats = React.useMemo(() => {
+    if (!lessons.length || !['year', 'month', 'week', 'day'].includes(activeView)) return null;
+
+    const filteredLessons = lessons.filter(l => {
+      const lDate = new Date(l.startTime);
+      if (activeView === 'day') return isSameDay(lDate, selectedDate);
+      if (activeView === 'week') return isSameWeek(lDate, selectedDate, { weekStartsOn: 1 });
+      if (activeView === 'month') return isSameMonth(lDate, selectedDate);
+      if (activeView === 'year') return isSameYear(lDate, selectedDate);
+      return false;
+    });
+
+    const totalMinutes = filteredLessons.reduce((acc, l) => {
+      if (!l.endTime) return acc;
+      try {
+        return acc + differenceInMinutes(new Date(l.endTime), new Date(l.startTime));
+      } catch (e) {
+        return acc;
+      }
+    }, 0);
+
+    return {
+      count: filteredLessons.length,
+      hours: (totalMinutes / 60).toFixed(1)
+    };
+  }, [lessons, selectedDate, activeView]);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,9 +114,29 @@ export default function Layout({ user, children, activeView, onViewChange, onSav
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
                   className="absolute left-0 top-full mt-2 w-56 rounded-2xl bg-white p-2 shadow-2xl border border-slate-100"
                 >
-                  <div className="px-3 py-2 mb-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Data Management</p>
-                  </div>
+                    <button
+                      onClick={() => {
+                        onOpenBookingLinks?.();
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-brick-600 transition-all"
+                    >
+                      <LinkIcon className="h-4 w-4" />
+                      Booking Links History
+                    </button>
+                    <button
+                      onClick={() => {
+                        onOpenHotkeys?.();
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-brick-600 transition-all"
+                    >
+                      <Keyboard className="h-4 w-4" />
+                      Keyboard Shortcuts
+                    </button>
+                    <div className="px-3 py-2 mb-1 mt-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Data Management</p>
+                    </div>
                   <button
                     onClick={() => {
                       onSaveData?.();
@@ -121,6 +189,18 @@ export default function Layout({ user, children, activeView, onViewChange, onSav
                 <div className="h-6 w-px bg-slate-200" />
 
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={onOpenNotifications}
+                    className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-brick-600 transition-colors"
+                    title="Booking Requests"
+                  >
+                    <Bell className="h-5 w-5" />
+                    {pendingRequestsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
+                        {pendingRequestsCount}
+                      </span>
+                    )}
+                  </button>
                   <div className="hidden flex-col items-end lg:flex">
                     <span className="text-sm font-medium">{user.displayName}</span>
                     <div className="flex items-center gap-1.5">
@@ -169,8 +249,23 @@ export default function Layout({ user, children, activeView, onViewChange, onSav
       </main>
 
       <footer className="mt-auto border-t border-slate-200 bg-white py-8">
-        <div className="mx-auto max-w-7xl px-4 text-center text-sm text-slate-500 sm:px-6 lg:px-8">
-          &copy; {new Date().getFullYear()} LessonSchedulerPro.
+        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+          {stats && (
+            <div className="mb-4 flex items-center justify-center gap-6">
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Lessons</span>
+                <span className="text-lg font-bold text-slate-900">{stats.count}</span>
+              </div>
+              <div className="h-8 w-px bg-slate-200" />
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Hours</span>
+                <span className="text-lg font-bold text-slate-900">{stats.hours}h</span>
+              </div>
+            </div>
+          )}
+          <div className="text-sm text-slate-500">
+            &copy; {new Date().getFullYear()} LessonSchedulerPro.
+          </div>
         </div>
       </footer>
     </div>

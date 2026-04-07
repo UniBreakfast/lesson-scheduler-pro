@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile information for the teacher.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string", "format": "uri" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Information about a student.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "notes": { "type": "string" },
+        "teacherUid": { "type": "string" }
+      },
+      "required": ["name", "teacherUid"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Details of a scheduled lesson.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "subject": { "type": "string" },
+        "notes": { "type": "string" },
+        "summary": { "type": "string", "description": "Gemini-generated summary" },
+        "teacherUid": { "type": "string" }
+      },
+      "required": ["studentId", "startTime", "endTime", "teacherUid"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Teacher profiles."
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Students managed by the teacher."
+    },
+    "/lessons/{lessonId}": {
+      "schema": "Lesson",
+      "description": "Scheduled lessons."
+    }
+  }
+}
